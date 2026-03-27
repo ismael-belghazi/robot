@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  kivy-apk:
+    build: .
+    container_name: kivy-builder
+    restart: unless-stopped
+
+    volumes:
+      - .:/home/buildozer/app
+      - buildozer-cache:/home/buildozer/.buildozer
+      - gradle-cache:/home/buildozer/.gradle
+
+    stdin_open: true
+    tty: true
+
+volumes:
+  buildozer-cache:
+  gradle-cache:
