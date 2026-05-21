@@ -931,14 +931,25 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="serveur_cerveau">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#site_commande.restaurant_site.app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        app
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="app">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#slaybot_hotspot.serveur_cerveau.broadcast_system" class="md-nav__link">
+  <a href="#site_commande.restaurant_site.app.has_unpaid_orders" class="md-nav__link">
     <span class="md-ellipsis">
       
-        broadcast_system
+        has_unpaid_orders
       
     </span>
   </a>
@@ -947,17 +958,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#slaybot_hotspot.app" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        app
-      
-    </span>
-  </a>
   
 </li>
       
@@ -1558,14 +1558,25 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="serveur_cerveau">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#site_commande.restaurant_site.app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        app
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="app">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#slaybot_hotspot.serveur_cerveau.broadcast_system" class="md-nav__link">
+  <a href="#site_commande.restaurant_site.app.has_unpaid_orders" class="md-nav__link">
     <span class="md-ellipsis">
       
-        broadcast_system
+        has_unpaid_orders
       
     </span>
   </a>
@@ -1574,17 +1585,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#slaybot_hotspot.app" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        app
-      
-    </span>
-  </a>
   
 </li>
       
@@ -1675,7 +1675,7 @@
 <h2 id="composants">Composants<a class="headerlink" href="#composants" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>serveur_cerveau.py</code> : Serveur WebSocket asynchrone avec gestion des connexions et routage.</li>
-<li><code>app.py</code> : Interface web Flask pour monitoring système.</li>
+<li><code>templates/app.py</code> : Interface web Flask pour monitoring système.</li>
 <li><code>templates/index.html</code> : Dashboard de surveillance avec métriques temps réel.</li>
 <li><code>install-hotspot.sh</code> : Installation automatique hotspot et dépendances.</li>
 <li><code>robot.service</code> : Service systemd pour démarrage automatique.</li>
@@ -1781,28 +1781,6 @@
 
 
 
-<div class="doc doc-object doc-function">
-
-
-<h3 id="slaybot_hotspot.serveur_cerveau.broadcast_system" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">broadcast_system</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">exclude_path</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-async"><code>async</code></small>
-  </span>
-
-<a href="#slaybot_hotspot.serveur_cerveau.broadcast_system" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Envoie un message à tous les clients connectés (Tactical Robot + APK).</p>
-
-
-    </div>
-
-</div>
-
 
 
   </div>
@@ -1815,11 +1793,11 @@
 
 
 
-<h2 id="slaybot_hotspot.app" class="doc doc-heading">
-            <code>slaybot_hotspot.app</code>
+<h2 id="site_commande.restaurant_site.app" class="doc doc-heading">
+            <code>site_commande.restaurant_site.app</code>
 
 
-<a href="#slaybot_hotspot.app" class="headerlink" title="Permanent link">&para;</a></h2>
+<a href="#site_commande.restaurant_site.app" class="headerlink" title="Permanent link">&para;</a></h2>
 
     <div class="doc doc-contents first">
 
@@ -1842,6 +1820,24 @@
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="site_commande.restaurant_site.app.has_unpaid_orders" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">has_unpaid_orders</span><span class="p">(</span><span class="n">table_number</span><span class="p">)</span></code>
+
+<a href="#site_commande.restaurant_site.app.has_unpaid_orders" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Vérifie s'il y a des commandes actives ou impayées pour cette table.</p>
+
+
+    </div>
+
+</div>
 
 
 
