@@ -8,6 +8,9 @@
     <script>
         window.TABLE_NUMBER = "{{ table }}";
         window.TABLE_TOKEN = "{{ token }}";
+        if (window.history && window.history.replaceState) {
+            window.history.replaceState({}, document.title, "/menu");
+        }
     </script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="{{ url_for('static', filename='client.js') }}?v=1" defer></script>
@@ -39,4 +42,4 @@
         </div>
     </div>
 </body>
-</html> 
+</html>

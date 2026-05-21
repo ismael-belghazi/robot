@@ -12,7 +12,20 @@ from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.metrics import dp
 
+try:
+    from plyer import notification
+except ImportError:
+    notification = None
+
 CONFIG_FILE = "config.json"
+
+# Table 1: Rouge | Table 2: Vert | Table 3: Jaune | Table 4: Bleu
+TABLE_COLORS = {
+    1: (0.9, 0.2, 0.2, 1),
+    2: (0.1, 0.6, 0.3, 1),
+    3: (0.9, 0.7, 0.1, 1),
+    4: (0.1, 0.4, 0.8, 1)
+}
 
 # =============================================================================
 # GESTION DES COMMUNICATIONS (WebSocket)
@@ -39,29 +52,65 @@ class RobotAPI:
         def on_msg(ws, message):
             raw = message.strip()
             msg = raw.lower()
+            
+            is_background = App.get_running_app().root_window is None or Clock.get_fps() < 5
+
+            if msg.startswith("sync/validate/order/"):
+                table_id = raw.split("/")[-1]
+                if MainScreen.instance:
+                    Clock.schedule_once(lambda dt, t=table_id: MainScreen.instance.remote_validate_order(t))
+                return
+            elif msg.startswith("sync/validate/clean/"):
+                table_id = raw.split("/")[-1]
+                if MainScreen.instance:
+                    Clock.schedule_once(lambda dt, t=table_id: MainScreen.instance.remote_validate_clean(t))
+                return
+            elif msg.startswith("sync/remove/queue/"):
+                task_name = raw.replace("sync/remove/queue/", "")
+                if MainScreen.instance:
+                    Clock.schedule_once(lambda dt, t=task_name: MainScreen.instance.remote_remove_queue(t))
+                return
+            elif msg == "sync/emergency_stop":
+                if MainScreen.instance:
+                    Clock.schedule_once(lambda dt: MainScreen.instance.remote_emergency_stop())
+                if is_background and notification:
+                    notification.notify(title="Robot-Server", message="ARRÊT D'URGENCE DECLENCHÉ !", timeout=5)
+                return
+
             if msg.startswith("order/table/") or raw.startswith("ORD Table "):
                 table_id = raw.split("/")[-1] if "order/table/" in msg else raw.split()[-1]
                 if MainScreen.instance:
                     Clock.schedule_once(lambda dt, t=table_id: MainScreen.instance.notify_new_order(t))
+                if is_background and notification:
+                    notification.notify(title="Nouvelle Commande !", message=f"Table {table_id} demande le robot.", timeout=4)
+
             elif msg.startswith("clean/table/") or raw.startswith("CLEAN Table "):
                 table_id = raw.split("/")[-1] if "clean/table/" in msg else raw.split()[-1]
                 if MainScreen.instance:
                     Clock.schedule_once(lambda dt, t=table_id: MainScreen.instance.notify_new_clean(t))
+                if is_background and notification:
+                    notification.notify(title="Nettoyage requis !", message=f"Table {table_id} doit être nettoyée.", timeout=4)
+
             elif raw.startswith("CANCEL Table ") or msg.startswith("cancel/table/"):
                 table_id = raw.split()[-1] if raw.startswith("CANCEL Table ") else raw.split("/")[-1]
                 if MainScreen.instance:
                     Clock.schedule_once(lambda dt, t=table_id: MainScreen.instance.notify_cancel_order(t))
+
             elif raw.startswith("READY Table ") or msg.startswith("ready/table/"):
                 table_id = raw.split()[-1] if raw.startswith("READY Table ") else raw.split("/")[-1]
                 if MainScreen.instance:
                     Clock.schedule_once(lambda dt, t=table_id: MainScreen.instance.notify_order_ready(t))
+
             elif raw.startswith("PAID Table ") or msg.startswith("paid/table/"):
                 table_id = raw.split()[-1] if raw.startswith("PAID Table ") else raw.split("/")[-1]
                 if MainScreen.instance:
                     Clock.schedule_once(lambda dt, t=table_id: MainScreen.instance.notify_payment(t))
+
             elif msg == "arrived/bar":
                 if MainScreen.instance:
                     Clock.schedule_once(lambda dt: MainScreen.instance.on_mission_complete())
+                if is_background and notification:
+                    notification.notify(title="Robot-Server", message="Le robot est arrivé au bar.", timeout=3)
 
         def on_open(ws):
             RobotAPI.online = True
@@ -91,15 +140,15 @@ class RobotAPI:
                 pass
 
 # =============================================================================
-# LOGIQUE MÉTIER ET INTERFACE PRINCIPALE
+# LOGIQUE INTERFACE PRINCIPALE
 # =============================================================================
 class MainScreen(Screen):
     instance = None
     status = StringProperty("Connexion...")
     connection_info = StringProperty("")
-    queue = ListProperty([])              # File du Robot
-    orders_to_prepare = ListProperty([])  # File Cuisine
-    clean_tasks = ListProperty([])        # File Nettoyage
+    queue = ListProperty([])              
+    orders_to_prepare = ListProperty([])  
+    clean_tasks = ListProperty([])        
     is_busy = False
     active_submenu = None
 
@@ -122,21 +171,26 @@ class MainScreen(Screen):
         self.status = "Tentative de reconnexion..."
         RobotAPI.connect()
 
-    # --- Gestion Commandes ---
+    def display_current_tab_state(self):
+        if self.active_submenu in ["commande", "nettoyage"]:
+            self.toggle_submenu(self.active_submenu)
+        else:
+            self.update_orders_ui()
+
     def notify_new_order(self, table_id):
         task = f"ORD Table {table_id}"
         if task not in self.orders_to_prepare and task not in self.queue:
             self.orders_to_prepare.append(task)
-            self.update_orders_ui()
+            self.display_current_tab_state()
 
     def notify_cancel_order(self, table_id):
         task = f"ORD Table {table_id}"
         if task in self.orders_to_prepare:
             self.orders_to_prepare.remove(task)
-            self.update_orders_ui()
         if task in self.queue:
             self.queue.remove(task)
             self.update_queue_ui()
+        self.display_current_tab_state()
         self.status = f"Commande annulée Table {table_id}"
 
     def notify_order_ready(self, table_id):
@@ -148,66 +202,87 @@ class MainScreen(Screen):
     def validate_order(self, task_name):
         if task_name in self.orders_to_prepare:
             self.orders_to_prepare.remove(task_name)
-            self.update_orders_ui()
             table_id = task_name.split()[-1]
-            self.add_to_queue(table_id, task_type="commande")
-
-            # Envoi immédiat au robot
+            
             if RobotAPI.online:
+                RobotAPI.send(f"sync/validate/order/{table_id}")
                 RobotAPI.send(f"go/table/{table_id}")
+            
+            self.add_to_queue(table_id, task_type="commande")
             self.is_busy = True
             self.status = f"En route (Commande) : Table {table_id}"
+            self.display_current_tab_state()
 
+    def remote_validate_order(self, table_id):
+        task = f"ORD Table {table_id}"
+        if task in self.orders_to_prepare:
+            self.orders_to_prepare.remove(task)
+        self.add_to_queue(table_id, task_type="commande")
+        self.display_current_tab_state()
+        self.status = f"Autre appareil : Envoi Table {table_id}"
 
-    def update_orders_ui(self):
-        container = self.ids.orders_list
-        container.clear_widgets()
-        for item in self.orders_to_prepare:
-            line = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(10))
-            lbl = Label(text=f"[b]{item}[/b]\n[size=12sp]À PRÉPARER[/size]", markup=True, halign='left')
-            btn = Button(text="PRÊT", size_hint_x=None, width=dp(80),
-                         background_normal='', background_color=(0, 0.6, 0.3, 1))
-            btn.bind(on_release=lambda x, it=item: self.validate_order(it))
-            line.add_widget(lbl)
-            line.add_widget(btn)
-            container.add_widget(line)
-        container.height = max(container.minimum_height, dp(50))
-
-    # --- Gestion Nettoyage ---
+    # --- Nettoyage ---
     def notify_new_clean(self, table_id):
         task = f"CLEAN Table {table_id}"
         if task not in self.clean_tasks and task not in self.queue:
             self.clean_tasks.append(task)
-            self.update_clean_ui()
+            self.display_current_tab_state()
 
     def validate_clean(self, task_name):
         if task_name in self.clean_tasks:
             self.clean_tasks.remove(task_name)
-            self.update_clean_ui()
             table_id = task_name.split()[-1]
-            self.add_to_queue(table_id, task_type="nettoyage")
-
-            # Envoi immédiat au robot
+            
             if RobotAPI.online:
+                RobotAPI.send(f"sync/validate/clean/{table_id}")
                 RobotAPI.send(f"go/table/{table_id}")
+                
+            self.add_to_queue(table_id, task_type="nettoyage")
             self.is_busy = True
             self.status = f"En route (Nettoyage) : Table {table_id}"
-        
-    def update_clean_ui(self):
+            self.display_current_tab_state()
+
+    def remote_validate_clean(self, table_id):
+        task = f"CLEAN Table {table_id}"
+        if task in self.clean_tasks:
+            self.clean_tasks.remove(task)
+        self.add_to_queue(table_id, task_type="nettoyage")
+        self.display_current_tab_state()
+        self.status = f"Autre appareil : Nettoyage Table {table_id}"
+
+    def update_orders_ui(self):
         container = self.ids.orders_list
         container.clear_widgets()
-        for item in self.clean_tasks:
-            line = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(10))
-            lbl = Label(text=f"[b]{item}[/b]\n[size=12sp]À NETTOYER[/size]", markup=True, halign='left')
-            btn = Button(text="PRÊT", size_hint_x=None, width=dp(80),
-                         background_normal='', background_color=(0.8, 0.5, 0.2, 1))
-            btn.bind(on_release=lambda x, it=item: self.validate_clean(it))
-            line.add_widget(lbl)
-            line.add_widget(btn)
-            container.add_widget(line)
+        
+        if self.active_submenu is None:
+            for item in self.orders_to_prepare:
+                table_id = int(item.split()[-1])
+                btn_color = TABLE_COLORS.get(table_id, (0.3, 0.3, 0.3, 1))
+                
+                line = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(10))
+                lbl = Label(text=f"[b]{item}[/b]\n[size=12sp]À PRÉPARER[/size]", markup=True, halign='left')
+                btn = Button(text="PRÊT", size_hint_x=None, width=dp(80),
+                             background_normal='', background_color=btn_color)
+                btn.bind(on_release=lambda x, it=item: self.validate_order(it))
+                line.add_widget(lbl)
+                line.add_widget(btn)
+                container.add_widget(line)
+                
+            for item in self.clean_tasks:
+                table_id = int(item.split()[-1])
+                btn_color = TABLE_COLORS.get(table_id, (0.3, 0.3, 0.3, 1))
+                
+                line = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(10))
+                lbl = Label(text=f"[b]{item}[/b]\n[size=12sp]À NETTOYER[/size]", markup=True, halign='left')
+                btn = Button(text="NETTOYÉ", size_hint_x=None, width=dp(80),
+                             background_normal='', background_color=btn_color)
+                btn.bind(on_release=lambda x, it=item: self.validate_clean(it))
+                line.add_widget(lbl)
+                line.add_widget(btn)
+                container.add_widget(line)
+
         container.height = max(container.minimum_height, dp(50))
 
-    # --- Gestion Queue Robot ---
     def add_to_queue(self, table_id, task_type="commande"):
         task = f"ORD Table {table_id}" if task_type=="commande" else f"CLEAN Table {table_id}"
         if task not in self.queue:
@@ -215,6 +290,15 @@ class MainScreen(Screen):
             self.update_queue_ui()
 
     def remove_from_queue(self, task_name):
+        if task_name in self.queue:
+            if self.queue.index(task_name) == 0 and self.is_busy:
+                self.is_busy = False
+            self.queue.remove(task_name)
+            self.update_queue_ui()
+            if RobotAPI.online:
+                RobotAPI.send(f"sync/remove/queue/{task_name}")
+
+    def remote_remove_queue(self, task_name):
         if task_name in self.queue:
             if self.queue.index(task_name) == 0 and self.is_busy:
                 self.is_busy = False
@@ -245,12 +329,9 @@ class MainScreen(Screen):
         if self.queue and not self.is_busy and RobotAPI.online:
             next_task = self.queue[0]
             table_id = next_task.split()[-1]
-
-            # Toujours envoyer go/table/X
             RobotAPI.send(f"go/table/{table_id}")
             self.is_busy = True
 
-            # Affichage visuel reste ORD ou CLEAN
             if next_task.startswith("ORD"):
                 self.status = f"En route (Commande) : Table {table_id}"
             elif next_task.startswith("CLEAN"):
@@ -258,58 +339,70 @@ class MainScreen(Screen):
             else:
                 self.status = f"En route : Table {table_id}"
 
-    # --- Sous-menus Commande/Nettoyage ---
     def toggle_submenu(self, task_type):
         container = self.ids.orders_list
         container.clear_widgets()
+        
+        if self.active_submenu == task_type and container.height > 0:
+            self.active_submenu = None
+            self.update_orders_ui()
+            return
+
         self.active_submenu = task_type
         box = BoxLayout(orientation='vertical', spacing=dp(10), size_hint_y=None)
         box.height = 0
+        
+        # Attribution dynamique du code couleur individuel demandé pour chaque bouton table
         for i in range(1, 5):
+            table_color = TABLE_COLORS.get(i, (0.3, 0.3, 0.3, 1))
+            
             btn = Button(
-                text=f"Table {i}",
+                text=f"Table {i} ({task_type.upper()})",
                 size_hint_y=None,
                 height=dp(50),
                 background_normal='',
-                background_color=(0.2, 0.6, 0.3, 1) if task_type=="commande" else (0.8, 0.5, 0.2, 1)
+                background_color=table_color
             )
             btn.bind(on_release=lambda x, tid=i, ttype=task_type: self.program_table(tid, ttype))
             box.add_widget(btn)
             box.height += dp(50) + dp(10)
+            
         container.add_widget(box)
         container.height = box.height
 
     def program_table(self, table_id, task_type):
         self.add_to_queue(table_id, task_type)
-        self.status = f"Table {table_id} programmée pour {task_type}"
-        self.ids.orders_list.clear_widgets()
-        self.ids.orders_list.height = 0
+        self.status = f"Table {table_id} programmée ({task_type})"
+        
+        if RobotAPI.online:
+            RobotAPI.send(f"sync/validate/{task_type}/{table_id}")
+            
         self.active_submenu = None
+        self.update_orders_ui()
 
-    # --- Arrêt d'urgence ---
     def emergency_stop(self):
-        # Stopper toutes les tâches
+        self.remote_emergency_stop()
+        if RobotAPI.online:
+            RobotAPI.send("sync/emergency_stop") 
+            RobotAPI.send("emergency_stop")
+
+    def remote_emergency_stop(self):
         self.queue.clear()
         self.orders_to_prepare.clear()
         self.clean_tasks.clear()
         self.is_busy = False
-        
-        # Mettre à jour l’UI
+        self.active_submenu = None
         self.update_queue_ui()
         self.update_orders_ui()
-        
-        # Statut
-        self.status = "ARRÊT D'URGENCE ! Moteurs arrêtés"
-        
-        # Envoyer commande d'arrêt complet au robot si en ligne
-        if RobotAPI.online:
-            RobotAPI.send("emergency_stop") 
+        self.status = "ARRÊT D'URGENCE INTER-APPLICATIONS !"
+
     def go_to_bar(self):
         if RobotAPI.online:
             RobotAPI.send("go/bar")
         self.status = "En route vers le bar..."
+
 # =============================================================================
-# ÉCRAN DE CONFIGURATION
+# CONFIGURATION ET CHARGEMENT
 # =============================================================================
 class SettingsScreen(Screen):
     def on_pre_enter(self):
@@ -326,9 +419,6 @@ class SettingsScreen(Screen):
         RobotAPI.connect()
         self.manager.current = "main"
 
-# =============================================================================
-# APPLICATION
-# =============================================================================
 class RobotApp(App):
     def build(self):
         if os.path.exists(CONFIG_FILE):
@@ -342,7 +432,7 @@ class RobotApp(App):
         return Builder.load_string(KV)
 
 # =============================================================================
-# KV DESIGN
+# STRUCTURE KV
 # =============================================================================
 KV = '''
 <StyledButton@Button>:
@@ -403,14 +493,14 @@ ScreenManager:
                 text: "Commande"
                 size_hint_y: None
                 height: dp(50)
-                background_color: 0.2, 0.6, 0.3, 1
+                background_color: 0.2, 0.4, 0.3, 1
                 on_release: root.toggle_submenu("commande")
 
             StyledButton:
                 text: "Nettoyage"
                 size_hint_y: None
                 height: dp(50)
-                background_color: 0.8, 0.5, 0.2, 1
+                background_color: 0.5, 0.4, 0.3, 1
                 on_release: root.toggle_submenu("nettoyage")
 
             Widget:
@@ -463,7 +553,7 @@ ScreenManager:
                     id: orders_list
                     orientation: "vertical"
                     size_hint_y: None
-                    height: 0
+                    height: self.minimum_height
                     spacing: dp(8)
 
             Widget:

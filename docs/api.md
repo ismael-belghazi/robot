@@ -30,6 +30,8 @@ Gestion du serveur central et des communications réseau.
 
 :::slaybot_hotspot
 
+:::slaybot_hotspot.templates.app
+
 Gestion de l'affichage et de l'interface visuelle.
 
 :::slaybot_screen
@@ -41,6 +43,10 @@ Logique embarquée pour la table (ESP32).
 Outils de simulation et de développement.
 
 :::slaybot_utilitaire_dev
+
+site de comande du restaurant 
+
+:::site_commande.restaurant_site.app
 
 Utilisation
 Lancer le serveur de documentation en local

@@ -1,26 +1,20 @@
 import qrcode
 import os
-import uuid
 
-# Crée le dossier si inexistant
 os.makedirs("qrcodes", exist_ok=True)
 
-# Table de test
-table_test = 1
 
-# Token universel temporaire pour tests
-token_test = "TESTTOKEN123"
+nombre_de_tables = 69
+IP_SERVEUR = "192.168.137.235:5000"
 
-# URL locale avec token
-base_url = f"http://127.0.0.1:5000/client?table={table_test}&token={token_test}"
+for numero_table in range(1, nombre_de_tables + 1):
+    url_fixe = f"http://{IP_SERVEUR}/client?table={numero_table}"
+    
+    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+    qr.add_data(url_fixe)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    img.save(f"qrcodes/qr_table_{numero_table}.png")
 
-# Génération du QR code
-qr = qrcode.QRCode(version=1, box_size=10, border=4)
-qr.add_data(base_url)
-qr.make(fit=True)
-img = qr.make_image(fill_color="black", back_color="white")
-filename = f"qrcodes/table_{table_test}_test.png"
-img.save(filename)
-
-print(f"QR code de test généré : {filename}")
-print(f"URL test : {base_url}")
+print("QR codes permanents générés avec la bonne route !")

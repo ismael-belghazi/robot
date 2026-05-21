@@ -17,7 +17,6 @@ class SlayBotTactical:
         self.root = root
         self.root.title(f"SLAYBOT_OS_{VERSION}")
         
-        # --- Fullscreen Terminal Mode ---
         self.root.configure(bg="#000500")
         self.root.overrideredirect(True)
         self.w = self.root.winfo_screenwidth()
@@ -30,7 +29,6 @@ class SlayBotTactical:
         self.pulse_val = 0
         self.pulse_dir = 1
         
-        # System State
         self.ws = None
         self.loop = None 
         self.connected = False
@@ -51,9 +49,9 @@ class SlayBotTactical:
         self.update_ui()
         self.blink_logic()
 
-    # --- LOGIQUE DE BOOT (COMPLÈTE) ---
+    # --- LOGIQUE DE BOOT (UI) ---
     def run_boot(self):
-        # Phase 1 : Le boot qui va crash
+        # Phase 1 : Le boot qui va crash (effect visuel volontaire pour rentre ca plus estetique)
         log_msgs_1 = [
             "INITIALIZING KERNEL_V4.2...",
             "CHECKING RAM_INTEGRITY... OK",
@@ -160,15 +158,12 @@ class SlayBotTactical:
             print("[SYS] EMERGENCY RESET BY OPERATOR")
             return
 
-        # Bouton Paramètres (Bas Droite)
         if event.x > self.w - 100 and event.y > self.h - 100:
             self.show_numpad()
                 
-        # Bouton Arrêt Urgence (Haut Droite)
         elif event.x > self.w - 120 and event.y < 80:
             self.emergency_shutdown()
             
-        # Bouton Réception (Zone Mallette / Bouton Tactique)
         elif self.state == "arrived":
             cx, cy = self.w/2, self.h/2
             my = cy + 150 * scale
@@ -215,7 +210,6 @@ class SlayBotTactical:
             self.frame_count += 1 
             cx, cy = self.w/2, self.h/2
 
-            # Détermination de la couleur globale
             main_color = "#0f0" if (self.connected and self.state != "emergency") else "#f00"
 
             # 1. Scanlines CRT (Fond)
@@ -277,8 +271,6 @@ class SlayBotTactical:
             self.canvas.create_rectangle(bx-8*s, by-8*s, bx+8*s, by+8*s, outline=color, fill=color)
 
             # --- 3. PARAMÈTRES D'EXPRESSION ---
-            # mouth_style: 0=ligne, 1=arc, 2=rectangle (ouvert)
-            # eye_shape: 0=normal, 1=colère (> <), 2=triste (/ \), 3=étonné (O O)
             if self.state == "moving":
                 m_curve, eye_y_off, m_style = 0.6, -10*s, 1
             elif self.state == "emergency" or not self.connected:
@@ -294,11 +286,9 @@ class SlayBotTactical:
                 ey = cy - 40 * s + eye_y_off + gy
                 h = 80 * s * self.eye_height
                 
-                # Lueur et contour de l'oeil
                 self.canvas.create_oval(ex-65*s, ey-h-5, ex+65*s, ey+h+5, outline=glow_color, width=2)
                 self.canvas.create_oval(ex-60*s, ey-h, ex+60*s, ey+h, outline=color, width=4)
                 
-                # Pupilles tactiques (croix ou point)
                 if self.eye_height > 0.4:
                     if self.state == "emergency":
                         # Yeux en X
@@ -308,7 +298,6 @@ class SlayBotTactical:
                         px = math.sin(self.frame_count * 0.05) * 8 * s if self.state == "idle" else 0
                         self.canvas.create_oval(ex-12*s+px, ey-12*s, ex+12*s+px, ey+12*s, fill=color)
 
-                # Sourcils (Angled Brows)
                 brow_y = ey - 100 * s
                 if self.state == "emergency" or not self.connected: # Colère /!\
                     self.canvas.create_line(ex-60*s, brow_y-20*s, ex+40*s*side, brow_y+20*s, fill=color, width=5)
@@ -318,28 +307,23 @@ class SlayBotTactical:
             # --- 5. LA BOUCHE ---
             my = cy + 150 * s + gy
             if self.state == "arrived":
-                # Bouton de confirmation (déjà présent mais ajusté)
                 bw_btn, bh_btn = 240 * s, 70 * s
                 self.canvas.create_rectangle(cx-bw_btn, my, cx+bw_btn, my+bh_btn, outline=color, width=4, fill="#001500")
                 self.canvas.create_text(cx, my+bh_btn/2, text=">> CONFIRM SYSTEM <<", fill=color, font=("Courier", int(18*s), "bold"))
             else:
                 mw = 100 * s
                 ctrl_y = my + (m_curve * 50 * s)
-                # Bouche avec un style "digital" (ligne brisée ou courbe)
                 self.canvas.create_line(cx-mw, my, cx, ctrl_y, cx+mw, my, fill=color, width=6, smooth=True)
 
     def draw_tactical_buttons(self):
-        # Bouton Paramètres (CMD)
         self.canvas.create_rectangle(self.w-70, self.h-70, self.w-20, self.h-20, outline="#0f0", width=2)
         self.canvas.create_text(self.w-45, self.h-45, text="CMD", fill="#0f0", font=("Courier", 10, "bold"))
         
-        # Bouton Arrêt Urgence (KILL_SW)
         self.canvas.create_rectangle(self.w-110, 20, self.w-20, 70, outline="red", width=2)
         self.canvas.create_text(self.w-65, 45, text="KILL_SW", fill="red", font=("Courier", 10, "bold"))
 
     def blink_logic(self):
             if self.state != "booting" and self.state != "emergency":
-                # Clignotement ultra-rapide
                 self.eye_height = 0.05
                 self.root.after(80, lambda: setattr(self, 'eye_height', 1.0))
             
@@ -351,6 +335,5 @@ class SlayBotTactical:
 if __name__ == "__main__":
     root = tk.Tk()
     app = SlayBotTactical(root)
-    # Lancement du réseau dans un thread séparé avec gestion de la loop
     threading.Thread(target=app.start_network, daemon=True).start()
     root.mainloop()

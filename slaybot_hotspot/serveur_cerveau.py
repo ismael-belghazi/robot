@@ -31,12 +31,10 @@ lock = asyncio.Lock()
 if not os.path.exists(ANGLE_FILE):
     with open(ANGLE_FILE, "w") as f: f.write("0")
 
-# --- CORRECTION : BROADCAST GLOBAL ---
+# --- BROADCAST GLOBAL ---
 async def broadcast_system(message, exclude_path=None):
-    """Envoie un message à tous les clients connectés (Tactical Robot + APK)."""
     if clients_actifs:
         clean_msg = str(message).lower().strip()
-        # On filtre les cibles (on peut exclure le script pilote par exemple)
         targets = [c for c in clients_actifs if getattr(c, 'path', '') != exclude_path]
         
         if targets:
@@ -47,7 +45,6 @@ async def broadcast_system(message, exclude_path=None):
     else:
         logger.warning(f"Aucun client connecté pour : {clean_msg}")
 
-# Gardé pour compatibilité mais redirige vers broadcast_system
 async def broadcast_apk(message):
     await broadcast_system(message, exclude_path="/pilote")
 
@@ -70,7 +67,6 @@ async def run_process(*args):
 async def move_robot(target_type, target_id=None):
     if target_type == "table":
         logger.info(f"ORDRE : Direction Table {target_id}")
-        # On prévient SlayBot (Robot) et l'APK qu'on bouge
         await broadcast_system(f"statut: deplacement table {target_id}")
         code, out, err = await run_process("python3", PILOTE_PATH, "table", str(target_id))
         msg_suffix = f"table/{target_id}"
@@ -83,7 +79,6 @@ async def move_robot(target_type, target_id=None):
     if code == 0:
         logger.info(f"ARRIVÉ (Succès script) : {msg_suffix}")
         await asyncio.sleep(0.5) 
-        # Envoi de l'ordre d'arrivée (déclenche le bouton CONFIRM sur SlayBot)
         await broadcast_system(f"arrived/{msg_suffix}")
     else:
         logger.error(f"ÉCHEC script (code {code}): {err}")
@@ -101,9 +96,7 @@ async def emergency_stop():
         process_en_cours = None
     
     with open(ANGLE_FILE, "w") as f: f.write("0")
-    # On force l'UI de SlayBot en mode URGENCE
     await broadcast_system("emergency_stop")
-    # On notifie l'APK du retour forcé à l'état bar
     await asyncio.sleep(1)
     await broadcast_system("arrived/bar")
 
@@ -111,8 +104,7 @@ async def handler(websocket):
     path = websocket.request.path
     websocket.path = path
     clients_actifs.add(websocket)
-    
-    logger.info(f"Connexion établie sur : {path} (Total: {len(clients_actifs)})")
+    logger.info(f"Connexion établie sur : {path}")
     
     try:
         async for message in websocket:
@@ -121,14 +113,17 @@ async def handler(websocket):
                     data = json.loads(message)
                     angle = data.get("angle", 0)
                     color = data.get("color", "NONE")
-                    with open(ANGLE_FILE, "w") as f: f.write(str(angle))
-                    pilote_logger.info(f"Angle: {angle} | Couleur: {color}")
-                except: pass
+                    msg_pour_robot = f"Angle: {angle} | Couleur: {color}"
+                    
+                    await broadcast_system(msg_pour_robot, exclude_path=None)
+                    logger.info(f"Relais Vision -> Robot: {msg_pour_robot}")
+                except Exception as e:
+                    logger.error(f"Erreur traitement vision: {e}")
+            
             else:
                 msg = message.strip().lower()
                 logger.info(f"RX (APK/Robot): {msg}")
                 
-                # Commandes de déplacement
                 if msg.startswith("go/table/"):
                     table_id = msg.split("/")[-1]
                     asyncio.create_task(move_robot("table", table_id))
@@ -136,7 +131,6 @@ async def handler(websocket):
                 elif msg == "go/bar":
                     asyncio.create_task(move_robot("bar"))
                 
-                # Commandes système
                 elif msg == "emergency_stop":
                     await emergency_stop()
                 
@@ -144,7 +138,6 @@ async def handler(websocket):
                     await asyncio.sleep(2)
                     asyncio.create_task(move_robot("bar"))
                 
-                # Rediffusion des autres messages d'état
                 elif any(x in msg for x in ["order/", "clean/", "ready/", "paid/", "status/", "tactical_connected"]):
                     await broadcast_system(msg)
 

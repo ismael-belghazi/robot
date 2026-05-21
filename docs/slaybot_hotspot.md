@@ -89,7 +89,7 @@ sudo systemctl start robot.service
 ## API du module
 
 ::: slaybot_hotspot.serveur_cerveau
-::: slaybot_hotspot.app
+::: site_commande.restaurant_site.app
 
 ## Maintenance
 

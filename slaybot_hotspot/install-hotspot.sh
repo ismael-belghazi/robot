@@ -8,8 +8,8 @@ LOG_DIR="$USER_HOME/Documents/slaybot_hotspot"
 VENV_PATH="$LOG_DIR/venv"
 WATCHDOG_SCRIPT="$LOG_DIR/slaybot_watchdog.sh"
 
-WIFI_AP="wlan0"      # Interne (Émet le réseau Slaybot)
-WIFI_INET="wlan1"    # Dongle USB (Capte ton PC 'raspberry')
+WIFI_AP="wlan0"      
+WIFI_INET="wlan1"    
 
 MAC_INTERNAL="d8:3a:dd:55:94:13"
 MAC_DONGLE="74:da:38:ea:66:3c"
@@ -29,7 +29,7 @@ fi
 mkdir -p "$LOG_DIR"
 
 echo "======================================================="
-echo "       SLAYBOT OS - V11.8 "Radio Silence"              "
+echo "       SLAYBOT OS - V12 cristal                        "
 echo "======================================================="
 echo "Mode : AP=$WIFI_AP | INET=$WIFI_INET"
 echo "0: Reset Total & Installation Stable (FIXE 137.60)"
@@ -40,17 +40,14 @@ system_hardening() {
     echo "[1/6] Nettoyage des verrous et forçage RF..."
     sudo fuser -kk /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock 2>/dev/null || true
     
-    # Reset RFKILL pour être sûr que les cartes sont "réveillées"
     sudo rfkill unblock all
     sudo iw reg set FR
 
-    # DNS Temporaire pour l'installation - ON DÉVERROUILLE
     sudo chattr -i /etc/resolv.conf 2>/dev/null || true
     echo -e "nameserver 8.8.8.8\nnameserver 1.1.1.1" | sudo tee /etc/resolv.conf > /dev/null
 
     sudo systemctl stop slaybot-net.service robot.service slaybot_web.service 2>/dev/null || true
     
-    # Nettoyage des interfaces
     sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null
 }
 
@@ -69,13 +66,11 @@ install_hotspot() {
 
     echo "[3/6] Configuration - Priorité au Dongle USB (FIXE 137.60)..."
     
-    # --- AMÉLIORATION IP FIXE ICI ---
     sudo nmcli connection add type wifi con-name "$INET_ID" ifname "$WIFI_INET" ssid "$INET_SSID" -- \
         wifi.mode infrastructure wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$INET_PWD" \
         ipv4.method manual ipv4.addresses 192.168.137.60/24 ipv4.gateway 192.168.137.1 \
         ipv4.dns "8.8.8.8,1.1.1.1" ipv4.route-metric 10
 
-    # On configure le HOTSPOT sur l'interne (wlan0)
     sudo nmcli connection add type wifi con-name "$HOTSPOT_SSID" ifname "$WIFI_AP" ssid "$HOTSPOT_SSID" -- \
         wifi.mode ap wifi.band bg wifi.channel 11 \
         wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$HOTSPOT_PWD" \
@@ -95,7 +90,6 @@ install_hotspot() {
         sudo nmcli connection up "$INET_ID" || (echo "Abandon." && exit 1)
     fi
 
-    # ÉTAPE 2 : Une fois Internet OK, on stabilise le DNS et on le CADENASSE
     sudo chattr -i /etc/resolv.conf 2>/dev/null || true
     echo -e "nameserver 8.8.8.8\nnameserver 1.1.1.1" | sudo tee /etc/resolv.conf > /dev/null
     sudo chattr +i /etc/resolv.conf
@@ -106,7 +100,6 @@ install_hotspot() {
     echo "[!] Phase 3 : Ouverture du Hotspot Slaybot..."
     sudo nmcli connection up "$HOTSPOT_SSID"
 
-    # NAT & Routage
     sudo iptables -F
     sudo iptables -t nat -F
     sudo iptables -t nat -A POSTROUTING -o "$WIFI_INET" -j MASQUERADE
@@ -121,8 +114,6 @@ install_hotspot() {
 setup_python_env() {
     echo "[5/6] Configuration Réseau & Environnement Python..."
 
-    # 1. Configuration DNS (Spécial UPJV / Partage Windows)
-    # On déverrouille au cas où, on écrit, puis on verrouille
     sudo chattr -i /etc/resolv.conf 2>/dev/null
     sudo tee /etc/resolv.conf <<EOF > /dev/null
 nameserver 193.49.184.5
@@ -130,15 +121,12 @@ nameserver 193.49.184.17
 nameserver 10.0.0.1
 search u-picardie.fr
 EOF
-    # On verrouille pour éviter que NetworkManager n'écrase tout pendant l'install
     sudo chattr +i /etc/resolv.conf 2>/dev/null
 
-    # 2. Forçage de la route vers le PC
     sudo ip route add default via 192.168.137.1 dev "$WIFI_INET" metric 1 2>/dev/null || true
 
     echo "[!] Installation des librairies (Mode Survie HTTP)..."
     
-    # On utilise tes paramètres de confiance pour pip
     "$VENV_PATH/bin/pip" install --no-cache-dir \
         --index-url http://pypi.org/simple \
         --extra-index-url http://pypi.python.org/simple \
@@ -190,16 +178,13 @@ create_services() {
 #!/bin/bash
 echo "--- SHIELD WATCHDOG INTELLIGENT ACTIVÉ ---"
 while true; do
-    # 1. Empêcher la veille Wi-Fi
     iw dev wlan0 set power_save off >/dev/null 2>&1
 
-    # 2. On ne relance Slaybot QUE s'il n'est pas actif
     if ! nmcli -t -f ACTIVE,NAME connection show --active | grep -q "^yes:Slaybot"; then
         echo "RÉPARATION: Relance du Hotspot Slaybot..."
         nmcli connection up "Slaybot" >/dev/null 2>&1
     fi
 
-    # 3. On ne relance le lien PC QUE s'il n'est pas actif
     if ! nmcli -t -f ACTIVE,NAME connection show --active | grep -q "^yes:pc-link-internet"; then
         echo "RÉPARATION: Relance du lien PC (wlan1)..."
         nmcli connection up "pc-link-internet" >/dev/null 2>&1
@@ -225,7 +210,6 @@ RestartSec=20
 WantedBy=multi-user.target
 EOF"
 
-    # 4. Activation du service
     sudo systemctl daemon-reload
     sudo systemctl enable --now slaybot-net.service
     sudo systemctl restart slaybot-net.service
