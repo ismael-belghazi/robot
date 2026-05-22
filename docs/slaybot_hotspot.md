@@ -14,7 +14,7 @@ Fournir l'infrastructure réseau et de communication pour :
 ## Composants
 
 - `serveur_cerveau.py` : Serveur WebSocket asynchrone avec gestion des connexions et routage.
-- `app.py` : Interface web Flask pour monitoring système.
+- `templates/app.py` : Interface web Flask pour monitoring système.
 - `templates/index.html` : Dashboard de surveillance avec métriques temps réel.
 - `install-hotspot.sh` : Installation automatique hotspot et dépendances.
 - `robot.service` : Service systemd pour démarrage automatique.
@@ -89,7 +89,7 @@ sudo systemctl start robot.service
 ## API du module
 
 ::: slaybot_hotspot.serveur_cerveau
-::: slaybot_hotspot.app
+::: site_commande.restaurant_site.app
 
 ## Maintenance
 

@@ -225,9 +225,16 @@ function setupOrderForm() {
         document.querySelectorAll('.menu-item .qty').forEach(span => span.textContent = '0');
     });
 
+    socket.on('order_delivered', data => {
+        if (data.table === tableNum) {
+            enableOrdering("Votre commande a été livrée ! Bon appétit !");
+            alert("Votre commande est arrivée ! Bon appétit !");
+        }
+    });
+
     socket.on('order_completed', data => {
         if (data.table === tableNum && data.token === tableToken) {
-            enableOrdering();
+            enableOrdering("Commande terminée. Vous pouvez recommander !");
             alert("Commande terminée. Vous pouvez recommander !");
         }
     });

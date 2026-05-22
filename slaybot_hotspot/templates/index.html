@@ -4,8 +4,8 @@
     <title>SLAYBOT | TACTICAL HEALTH</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Favicon initialisé par JS -->
     <link id="favicon" rel="icon" type="image/x-icon" href="">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --neon-green: #00ff41;
@@ -13,19 +13,21 @@
             --bg-black: #0a0a0a;
             --panel-bg: rgba(0, 255, 65, 0.03);
             --font-main: 'Segoe UI', 'Ubuntu Mono', monospace;
+            --neon-purple: #b700ff; 
+            --dark-purple: #2a003d;
         }
 
         body { 
             background-color: var(--bg-black);
             color: var(--neon-green);
             font-family: var(--font-main);
-            margin: 0; padding: 0;
+            margin: 0; padding: 20px 0;
             display: flex; align-items: center; justify-content: center;
-            height: 100vh; overflow: hidden;
+            min-height: 100vh;
+            box-sizing: border-box;
             text-transform: uppercase; letter-spacing: 1px;
         }
 
-        /* Scanlines & Grain */
         body::before {
             content: " ";
             position: fixed; top: 0; left: 0; bottom: 0; right: 0;
@@ -35,7 +37,6 @@
             z-index: 100; pointer-events: none;
         }
 
-        /* Écran d'initialisation */
         #boot-screen {
             position: fixed;
             top: 0; left: 0; width: 100vw; height: 100vh;
@@ -77,7 +78,7 @@
         }
 
         .system-display {
-            padding: 40px 20px;
+            padding: 20px;
             background: rgba(0, 0, 0, 0.4);
             display: flex; flex-direction: column; gap: 20px;
         }
@@ -105,10 +106,47 @@
             display: flex; justify-content: space-between; opacity: 0.8;
         }
 
+        .battery-flex {
+            display: flex; 
+            align-items: center; 
+            justify-content: space-around; 
+            gap: 20px;
+            padding: 10px;
+        }
+
+        .cell-block {
+            border: 1px solid var(--neon-purple);
+            height: 30px; display: flex; align-items: center; justify-content: center;
+            font-size: 0.6rem; transition: all 0.5s;
+            color: var(--neon-purple);
+        }
+        .voltage-row {
+            display: flex; justify-content: space-between; font-family: 'Ubuntu Mono';
+            font-size: 0.8rem; margin-bottom: 4px; border-bottom: 1px dotted rgba(183, 0, 255, 0.2);
+        }
+        .critical { 
+            background: rgba(255, 62, 62, 0.3); 
+            border-color: #ff3e3e; 
+            color: #ff3e3e; 
+            animation: blinker 0.5s infinite; 
+        }
+        .nominal { background: rgba(183, 0, 255, 0.05); }
+
         .blink { animation: blinker 1s infinite; }
         @keyframes blinker { 50% { opacity: 0; } }
 
-        @media (max-width: 750px) { .data-grid { grid-template-columns: 1fr; } }
+        .graph-container {
+            flex-grow: 1;
+            max-width: 350px;
+            height: 120px;
+            position: relative;
+        }
+
+        @media (max-width: 850px) { 
+            .data-grid { grid-template-columns: 1fr; }
+            .battery-flex { flex-direction: column; align-items: stretch; }
+            .graph-container { max-width: 100%; height: 150px; margin-top: 10px; }
+        }
     </style>
 </head>
 <body>
@@ -134,7 +172,6 @@
 
     <div class="system-display">
         <div class="data-grid">
-            <!-- CPU -->
             <div class="module-card">
                 <span class="label">// CPU_LOAD</span>
                 <span id="cpu_usage_text" class="value">--%</span>
@@ -144,7 +181,6 @@
                 </div>
             </div>
 
-            <!-- RAM -->
             <div class="module-card">
                 <span class="label">// MEM_BUFFER</span>
                 <span id="ram_usage_text" class="value">--%</span>
@@ -154,7 +190,6 @@
                 </div>
             </div>
 
-            <!-- NET -->
             <div class="module-card">
                 <span class="label">// SIGNAL_STRENGTH</span>
                 <span id="inet_signal" class="value">--%</span>
@@ -164,31 +199,68 @@
                 </div>
             </div>
         </div>
+
+        <div class="module-card" style="border-left: 3px solid #b700ff !important; background: rgba(183, 0, 255, 0.05); box-shadow: inset 5px 0 15px rgba(183, 0, 255, 0.1);">
+            <span class="label" style="color: #b700ff !important;">// LIPO_4S_STABILIZATION_UNIT (3800MAH 20C)</span>
+            <div class="battery-flex">
+                
+                <div style="position: relative; width: 100px; height: 120px; border: 1px solid rgba(183, 0, 255, 0.4); border-radius: 5px; flex-shrink: 0; margin: 0 auto;">
+                    <div style="position: absolute; top: -5px; left: 50%; transform: translateX(-50%); width: 20px; height: 5px; background: #b700ff; box-shadow: 0 0 10px #b700ff;"></div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 15px 10px;">
+                        <div id="c0_box" class="cell-block">C1</div>
+                        <div id="c1_box" class="cell-block">C2</div>
+                        <div id="c2_box" class="cell-block">C3</div>
+                        <div id="c3_box" class="cell-block">C4</div>
+                    </div>
+                </div>
+
+                <div style="flex-grow: 1; min-width: 150px;">
+                    <div class="voltage-row">
+                        <span>CELL_01</span> <strong id="v0" style="color: #b700ff !important;">--V</strong>
+                    </div>
+                    <div class="voltage-row">
+                        <span>CELL_02</span> <strong id="v1" style="color: #b700ff !important;">--V</strong>
+                    </div>
+                    <div class="voltage-row">
+                        <span>CELL_03</span> <strong id="v2" style="color: #b700ff !important;">--V</strong>
+                    </div>
+                    <div class="voltage-row">
+                        <span>CELL_04</span> <strong id="v3" style="color: #b700ff !important;">--V</strong>
+                    </div>
+                    
+                    <div style="margin-top: 10px; border-top: 1px solid rgba(183, 0, 255, 0.5); padding-top: 5px;">
+                        <span class="label">TOTAL_OUTPUT</span>
+                        <span id="v_total" style="font-size: 1.8rem; font-family: 'Ubuntu Mono'; color: #b700ff !important; text-shadow: 0 0 15px rgba(183, 0, 255, 0.6);">--V</span>
+                    </div>
+                </div>
+
+                <div class="graph-container">
+                    <canvas id="voltageChart"></canvas>
+                </div>
+
+            </div>
+        </div>
     </div>
 
     <footer style="padding: 15px 20px; font-size: 0.7rem; opacity: 0.5; border-top: 1px solid rgba(0, 255, 65, 0.1);">
-        > DIAGNOSTIC_MODE: ACTIVE // TELEMETRY_STREAM_CONNECTED
+        &gt; DIAGNOSTIC_MODE: ACTIVE // TELEMETRY_STREAM_CONNECTED
     </footer>
 </div>
 
 <script>
-    // --- FAVICON ECG DYNAMIQUE ---
     const canvas = document.createElement('canvas');
     canvas.width = 32; canvas.height = 32;
     const ctx = canvas.getContext('2d');
     const favicon = document.getElementById('favicon');
-
     let offset = 0;
     function drawFavicon() {
         ctx.fillStyle = "black";
         ctx.fillRect(0, 0, 32, 32);
-        
         ctx.strokeStyle = "#00ff41";
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(0, 16);
-        
-        // Dessin de l'onde ECG
         for (let x = 0; x < 32; x++) {
             let y = 16;
             let pos = (x + offset) % 32;
@@ -204,13 +276,58 @@
     }
     drawFavicon();
 
-    // --- SÉQUENCE DE BOOT ---
+    const vCtx = document.getElementById('voltageChart').getContext('2d');
+    const maxDataPoints = 10; 
+    
+    const voltageChart = new Chart(vCtx, {
+        type: 'line',
+        data: {
+            labels: Array(maxDataPoints).fill(''), 
+            datasets: [{
+                label: 'TOTAL VOLTAGE',
+                data: Array(maxDataPoints).fill(null),
+                borderColor: '#b700ff',
+                borderWidth: 2,
+                pointBackgroundColor: '#b700ff',
+                pointRadius: 2,
+                fill: true,
+                backgroundColor: 'rgba(183, 0, 255, 0.05)',
+                tension: 0.3 
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { display: false }, 
+                y: {
+                    min: 10.0, 
+                    max: 17.5, 
+                    ticks: {
+                        color: 'rgba(183, 0, 255, 0.6)',
+                        font: { size: 9, family: 'Ubuntu Mono' },
+                        stepSize: 2
+                    },
+                    grid: { color: 'rgba(183, 0, 255, 0.1)' }
+                }
+            }
+        }
+    });
+
+    function addChartData(value) {
+        voltageChart.data.datasets[0].data.push(value);
+        if (voltageChart.data.datasets[0].data.length > maxDataPoints) {
+            voltageChart.data.datasets[0].data.shift(); 
+        }
+        voltageChart.update();
+    }
+
     window.onload = () => {
-        const logs = ["LOADING KERNEL...", "MOUNTING TELEMETRY...", "FETCHING SENSORS...", "HEALTH_CORE ONLINE"];
+        const logs = ["LOADING KERNEL...", "MOUNTING TELEMETRY...", "MCP3008_INIT...", "HEALTH_CORE ONLINE"];
         let step = 0;
         const logEl = document.getElementById('boot-log');
         const progressEl = document.getElementById('boot-progress');
-        
         const bootInterval = setInterval(() => {
             if (step < logs.length) {
                 logEl.innerText = logs[step];
@@ -227,7 +344,6 @@
         }, 400);
     };
 
-    // --- MISE À JOUR DES STATS ---
     function updateStats() {
         fetch('/stats')
             .then(res => res.json())
@@ -242,6 +358,22 @@
                 document.getElementById('cpu_bar').style.width = data.cpu_usage + "%";
                 document.getElementById('ram_bar').style.width = data.ram_usage + "%";
                 document.getElementById('net_bar').style.width = data.inet_signal + "%";
+
+                if (data.cells) {
+                    let totalV = 0;
+                    data.cells.forEach((v, i) => {
+                        totalV += v;
+                        document.getElementById(`v${i}`).innerText = v + "V";
+                        const box = document.getElementById(`c${i}_box`);
+                        if (v < 3.4) {
+                            box.className = "cell-block critical";
+                        } else {
+                            box.className = "cell-block nominal";
+                        }
+                    });
+                    document.getElementById('v_total').innerText = totalV.toFixed(2) + "V";
+                    addChartData(totalV);
+                }
 
                 if(data.cpu_temp > 65) {
                     document.getElementById('cpu_temp').style.color = "#ff3e3e";
@@ -267,6 +399,5 @@
     setInterval(updateStats, 3000);
     updateStats();
 </script>
-
 </body>
 </html>

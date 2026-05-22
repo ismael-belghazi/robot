@@ -13,13 +13,13 @@ socket.on('join_error', data => {
 });
 
 // =========================
-// TABLE THEMES
+// TABLE THEMES (Couleurs contrastées pour la lisibilité)
 // =========================
 const tableThemes = {
-    1: { bg: '#6b0000', menu: '#a00000' },
-    2: { bg: '#004d00', menu: '#007f00' },
-    3: { bg: '#996600', menu: '#cc9900' },
-    4: { bg: '#00194d', menu: '#0033a0' }
+    1: { bg: '#6b0000', menu: '#ffffff' }, // Fond bordeaux, texte blanc
+    2: { bg: '#004d00', menu: '#ffffff' }, // Fond vert sapin, texte blanc
+    3: { bg: '#996600', menu: '#ffffff' }, // Fond marron/or, texte blanc
+    4: { bg: '#00194d', menu: '#ffffff' }  // Fond bleu nuit, texte blanc
 };
 
 // =========================
@@ -38,48 +38,56 @@ function renderOrders(orders) {
     orders.forEach(order => {
         if (!order || !order.table || !order.plats) return;
 
-        const status = (order.status || 'EN_ATTENTE').toLowerCase();
-        if (status === 'cancelled' || status === 'payee') return;
+        // Nettoyage du statut (minuscules)
+        let status = (order.status || 'en_attente').toLowerCase();
+        if (status === 'prêt') status = 'pret'; 
 
-        const theme = tableThemes[order.table] || { bg: '#fff', menu: '#000' };
-        const tr = document.createElement('tr');
-        tr.classList.add('order-row');
-        tr.style.backgroundColor = theme.bg;
-        tr.style.color = theme.menu;
+        if (status === 'cancelled' || status === 'annule' || status === 'payee' || status === 'payé') return;
 
-        // Compter les plats
-        const platsCount = {};
-        order.plats.forEach(p => platsCount[p] = (platsCount[p] || 0) + 1);
-        const platsDisplay = Object.entries(platsCount)
-            .map(([plat, qty]) => `${qty}x ${plat}`).join(', ');
+        if (status === 'en_attente' || status === 'preparation') {
+            const theme = tableThemes[order.table] || { bg: '#ffffff', menu: '#000000' };
+            const tr = document.createElement('tr');
+            tr.classList.add('order-row');
+            tr.style.backgroundColor = theme.bg;
+            tr.style.color = theme.menu;
 
-        // Couleur du statut
-        const statusColors = { 'en_attente': '#ffcc00', 'pret': '#00ff00', 'prêt': '#00ff00', 'preparation': '#ffaa00' };
-        const statusColor = statusColors[status] || theme.menu;
+            const platsCount = {};
+            order.plats.forEach(p => platsCount[p] = (platsCount[p] || 0) + 1);
+            const platsDisplay = Object.entries(platsCount)
+                .map(([plat, qty]) => `${qty}x ${plat}`).join(', ');
 
-        tr.innerHTML = `
-            <td>${order.table}</td>
-            <td>${platsDisplay}</td>
-            <td style="color:${statusColor}; font-weight:bold;">${status}</td>
-            <td>
-                <button class="confirm-btn" data-table="${order.table}">Confirmer</button>
-                <button class="cancel-btn" data-table="${order.table}">Annuler</button>
-            </td>
-        `;
-        ordersBody.appendChild(tr);
+            const statusColors = { 
+                'en_attente': '#ffcc00', 
+                'preparation': '#ffaa00'
+            };
+            const statusColor = statusColors[status] || theme.menu;
 
-        // Récapitulatif par table
+            tr.innerHTML = `
+                <td>${order.table}</td>
+                <td>${platsDisplay}</td>
+                <td style="color:${statusColor}; font-weight:bold;">${status.toUpperCase()}</td>
+                <td>
+                    <button class="confirm-btn" data-table="${order.table}">Confirmer</button>
+                    <button class="cancel-btn" data-table="${order.table}">Annuler</button>
+                </td>
+            `;
+            ordersBody.appendChild(tr);
+        }
+
         if (!summary[order.table]) {
             summary[order.table] = { plats: [], total: 0, ready: true };
         }
+        
         summary[order.table].plats.push(...order.plats);
-        summary[order.table].total += order.plats.length * 5; // prix fixe pour simplifier
-        if (status !== 'prêt') summary[order.table].ready = false;
+        summary[order.table].total += float(order.total_price) || 0; 
+
+        if (status === 'en_attente' || status === 'preparation') {
+            summary[order.table].ready = false;
+        }
     });
 
-    // Générer le tableau récapitulatif
     Object.keys(summary).forEach(table => {
-        const theme = tableThemes[table] || { bg: '#fff', menu: '#000' };
+        const theme = tableThemes[table] || { bg: '#ffffff', menu: '#000000' };
         const tr = document.createElement('tr');
         tr.classList.add('summary-row');
         tr.style.backgroundColor = theme.bg;
@@ -104,6 +112,10 @@ function renderOrders(orders) {
     bindButtonEvents();
 }
 
+function float(val) {
+    const parsed = parseFloat(val);
+    return isNaN(parsed) ? 0 : parsed;
+}
 // =========================
 // BIND BUTTON EVENTS
 // =========================

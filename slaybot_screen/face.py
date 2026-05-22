@@ -17,7 +17,6 @@ class SlayBotTactical:
         self.root = root
         self.root.title(f"SLAYBOT_OS_{VERSION}")
         
-        # --- Fullscreen Terminal Mode ---
         self.root.configure(bg="#000500")
         self.root.overrideredirect(True)
         self.w = self.root.winfo_screenwidth()
@@ -25,12 +24,13 @@ class SlayBotTactical:
         self.root.geometry(f"{self.w}x{self.h}+0+0")
         self.root.attributes("-topmost", True)
         self.root.config(cursor="none")
+        
         self.frame_count = 0
-        self.pulse_val=0
-        self.pulse_dir=1
-        # System State
+        self.pulse_val = 0
+        self.pulse_dir = 1
+        
         self.ws = None
-        self.loop = None # Sera défini dans start_network
+        self.loop = None 
         self.connected = False
         self.state = "booting"
         self.boot_logs = []
@@ -49,9 +49,9 @@ class SlayBotTactical:
         self.update_ui()
         self.blink_logic()
 
-    # --- LOGIQUE DE BOOT (COMPLÈTE) ---
+    # --- LOGIQUE DE BOOT (UI) ---
     def run_boot(self):
-        # Phase 1 : Le boot qui va crash
+        # Phase 1 : Le boot qui va crash (effect visuel volontaire pour rentre ca plus estetique)
         log_msgs_1 = [
             "INITIALIZING KERNEL_V4.2...",
             "CHECKING RAM_INTEGRITY... OK",
@@ -102,40 +102,37 @@ class SlayBotTactical:
 
     # --- GESTION RÉSEAU ---
     async def listen(self):
-            uri = f"ws://{SERVER_IP}:{PORT}"
-            while True:
-                try:
-                    async with websockets.connect(uri) as ws:
-                        self.ws = ws
-                        self.connected = True
-                        await ws.send("STATUS/TACTICAL_CONNECTED")
-                        async for msg in ws:
-                            m = msg.lower()
-                            print(f"Received: {m}") 
+        uri = f"ws://{SERVER_IP}:{PORT}"
+        while True:
+            try:
+                async with websockets.connect(uri) as ws:
+                    self.ws = ws
+                    self.connected = True
+                    await ws.send("STATUS/TACTICAL_CONNECTED")
+                    async for msg in ws:
+                        m = msg.lower()
+                        print(f"Received: {m}") 
 
-                            # Correction des conditions de détection
-                            if "go/table" in m or "clean/table" in m or "statut: deplacement" in m:
-                                self.state = "moving"
-                                                        
-                            elif "arrived" in m or "arrivé" in m:
-                                    if "bar" in m:
-                                        self.state = "idle" 
-                                    else:
-                                        self.state = "arrived" 
-                            elif "emergency" in m:
-                                            self.state = "emergency"
+                        if "go/table" in m or "clean/table" in m or "statut: deplacement" in m:
+                            self.state = "moving"
+                        elif "arrived" in m or "arrivé" in m:
+                            if "bar" in m:
+                                self.state = "idle" 
+                            else:
+                                self.state = "arrived" 
+                        elif "emergency" in m:
+                            self.state = "emergency"
                                 
-                except Exception as e:
-                    print(f"Erreur connexion: {e}")
-                    self.connected = False
-                    self.ws = None
-                    await asyncio.sleep(2)
+            except Exception as e:
+                print(f"Erreur connexion: {e}")
+                self.connected = False
+                self.ws = None
+                await asyncio.sleep(2)
 
     def start_network(self):
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         self.loop.run_until_complete(self.listen())
-
 
     def emergency_shutdown(self):
         if self.ws and self.loop:
@@ -143,40 +140,35 @@ class SlayBotTactical:
                 self.ws.send("[WARNING] !!! EMERGENCY STOP !!!"), 
                 self.loop
             )
-        self.trigger_emergency_ui()
+        self.state = "emergency"
 
     def confirm_reception(self):
-            if self.ws and self.loop:
-                asyncio.run_coroutine_threadsafe(
-                    self.ws.send("status/received"), 
-                    self.loop
-                )
-            self.state = "idle" 
+        if self.ws and self.loop:
+            asyncio.run_coroutine_threadsafe(
+                self.ws.send("status/received"), 
+                self.loop
+            )
+        self.state = "idle" 
             
     def handle_click(self, event):
-            # On définit le scale ici aussi pour que les calculs de collision fonctionnent
-            scale = self.h / 1000 
-            if self.state == "emergency":
-                self.state = "idle"
-                print("[SYS] EMERGENCY RESET BY OPERATOR")
-                return
+        scale = self.h / 1000 
+        
+        if self.state == "emergency":
+            self.state = "idle"
+            print("[SYS] EMERGENCY RESET BY OPERATOR")
+            return
 
-            # Bouton Paramètres (Bas Droite)
-            if event.x > self.w - 100 and event.y > self.h - 100:
-                self.show_numpad()
+        if event.x > self.w - 100 and event.y > self.h - 100:
+            self.show_numpad()
                 
-            # Bouton Arrêt Urgence (Haut Droite)
-            elif event.x > self.w - 120 and event.y < 80:
-                self.state = "emergency"
-                if self.ws:
-                    asyncio.run_coroutine_threadsafe(self.ws.send("emergency_stop"), self.loop)
+        elif event.x > self.w - 120 and event.y < 80:
+            self.emergency_shutdown()
             
-            # Bouton Réception (Zone Mallette / Bouton Tactique)
-            elif self.state == "arrived":
-                cx, cy = self.w/2, self.h/2
-                my = cy + 150 * scale
-                bw, bh = 240 * scale, 70 * scale # Doit être identique à draw_face
-            if cx-bw < event.x < cx+bw and my+20 < event.y < my+20+bh:
+        elif self.state == "arrived":
+            cx, cy = self.w/2, self.h/2
+            my = cy + 150 * scale
+            bw, bh = 240 * scale, 70 * scale
+            if cx-bw < event.x < cx+bw and my < event.y < my+bh:
                 self.confirm_reception()
 
     def show_numpad(self):
@@ -186,15 +178,21 @@ class SlayBotTactical:
         win.configure(bg="#000")
         win.overrideredirect(True)
         win.geometry(f"+{int(self.w/2-150)}+{int(self.h/2-225)}")
+        win.attributes("-topmost", True)
         
         entry_var = tk.StringVar()
         tk.Label(win, textvariable=entry_var, font=("Courier", 24), bg="#000", fg="#0f0").pack(pady=10)
         
         def press(k):
-            if k == 'EXIT': win.destroy(); self.root.config(cursor="none")
-            elif k == 'OFF' and entry_var.get() == ADMIN_PASSWORD: self.root.destroy()
-            elif k == 'C': entry_var.set("")
-            else: entry_var.set(entry_var.get() + k)
+            if k == 'EXIT': 
+                win.destroy()
+                self.root.config(cursor="none")
+            elif k == 'OFF' and entry_var.get() == ADMIN_PASSWORD: 
+                self.root.destroy()
+            elif k == 'C': 
+                entry_var.set("")
+            else: 
+                entry_var.set(entry_var.get() + k)
 
         frame = tk.Frame(win, bg="#000")
         frame.pack()
@@ -209,10 +207,9 @@ class SlayBotTactical:
     def update_ui(self):
         try:
             self.canvas.delete("all")
-            self.frame_count += 1 # Incrémentation pour les calculs mathématiques
+            self.frame_count += 1 
             cx, cy = self.w/2, self.h/2
 
-            # Détermination de la couleur globale
             main_color = "#0f0" if (self.connected and self.state != "emergency") else "#f00"
 
             # 1. Scanlines CRT (Fond)
@@ -220,14 +217,13 @@ class SlayBotTactical:
                 self.canvas.create_line(0, i, self.w, i, fill="#000700")
 
             # 2. Effet Radar
-            scan_y = (self.frame_count * 5) % self.h
-            self.canvas.create_line(0, scan_y, self.w, scan_y, fill="#003300", width=2)
-
+            scan_y = (self.frame_count * 7) % self.h
+            self.canvas.create_line(0, scan_y, self.w, scan_y, fill="#005500", width=3)
+            self.canvas.create_line(0, scan_y-10, self.w, scan_y-10, fill="#025A02", width=1)
             if self.state == "booting":
                 self.draw_boot_screen(cx, cy)
             else:
                 self.draw_tactical_hud(cx, cy)
-                # ON PASSE main_color ICI
                 self.draw_face(cx, cy, main_color)
                 self.draw_tactical_buttons()
 
@@ -258,69 +254,86 @@ class SlayBotTactical:
         self.canvas.create_text(20, self.h-30, text=f"> {status} | {self.state.upper()} | {VERSION}", fill=color, anchor="w", font=("Courier", 12))
 
     def draw_face(self, cx, cy, color):
-        s = self.h / 1000 
-        glow_color = "#001a00" if color == "#0f0" else "#1a0000"
-        
-        # --- 1. LE NOEUD PAPILLON ---
-        bx, by = cx, cy + 240 * s
-        bw, bh = 50 * s, 28 * s
-        self.canvas.create_polygon(bx, by, bx-bw, by-bh, bx-bw, by+bh, outline=color, fill="#000500", width=2)
-        self.canvas.create_polygon(bx, by, bx+bw, by-bh, bx+bw, by+bh, outline=color, fill="#000500", width=2)
-        self.canvas.create_rectangle(bx-8*s, by-8*s, bx+8*s, by+8*s, outline=color, fill=color)
-
-        # --- 2. EXPRESSIONS ---
-        if self.state == "moving":
-            mouth_curve, eyebrow_lift = 0.5, -12 * s
-        elif self.state == "emergency" or not self.connected:
-            mouth_curve, eyebrow_lift = -1.2, -25 * s
-        elif self.state == "arrived":
-            mouth_curve, eyebrow_lift = 1.8, 15 * s
-        else:
-            mouth_curve, eyebrow_lift = 0.2, 0
-
-        # --- 3. LES YEUX ---
-        for side in [-1, 1]:
-            ex = cx + (side * 160 * s)
-            ey = cy - 40 * s + eyebrow_lift
-            h = 80 * s * self.eye_height
-            self.canvas.create_oval(ex-65*s, ey-h-5, ex+65*s, ey+h+5, outline=glow_color, width=2)
-            self.canvas.create_oval(ex-60*s, ey-h, ex+60*s, ey+h, outline=color, width=4)
+            s = self.h / 1000 
+            glow_color = "#001a00" if color == "#0f0" else "#1a0000"
             
-            if self.eye_height > 0.5:
-                # Utilisation de frame_count pour le balayage du regard
-                px = math.sin(self.frame_count * 0.05) * 10 * s if self.state == "idle" else 0
-                self.canvas.create_oval(ex-15*s+px, ey-15*s, ex+15*s+px, ey+15*s, fill=color)
+            # --- 1. EFFET GLITCH (Si Emergency ou Déconnecté) ---
+            gx, gy = 0, 0
+            if self.state == "emergency" or not self.connected:
+                gx = random.randint(-3, 3)
+                gy = random.randint(-3, 3)
 
-        # --- 4. LA BOUCHE ---
-        my = cy + 150 * s
-        if self.state == "arrived":
-            bw_btn, bh_btn = 240 * s, 70 * s
-            self.canvas.create_rectangle(cx-bw_btn, my, cx+bw_btn, my+bh_btn, outline=color, width=4, fill="#000800")
-            self.canvas.create_text(cx, my+bh_btn/2, text=">> CONFIRM SYSTEM <<", fill=color, font=("Courier", int(18*s), "bold"))
-        else:
-            mw = 90 * s
-            ctrl_y = my + (mouth_curve * 40 * s)
-            self.canvas.create_line(cx-mw, my, cx, ctrl_y, cx+mw, my, fill=color, width=6, smooth=True, capstyle="round")
-            
+            # --- 2. LE NOEUD PAPILLON ---
+            bx, by = cx + gx, cy + 240 * s + gy
+            bw, bh = 50 * s, 28 * s
+            self.canvas.create_polygon(bx, by, bx-bw, by-bh, bx-bw, by+bh, outline=color, fill="#000500", width=2)
+            self.canvas.create_polygon(bx, by, bx+bw, by-bh, bx+bw, by+bh, outline=color, fill="#000500", width=2)
+            self.canvas.create_rectangle(bx-8*s, by-8*s, bx+8*s, by+8*s, outline=color, fill=color)
+
+            # --- 3. PARAMÈTRES D'EXPRESSION ---
+            if self.state == "moving":
+                m_curve, eye_y_off, m_style = 0.6, -10*s, 1
+            elif self.state == "emergency" or not self.connected:
+                m_curve, eye_y_off, m_style = -1.5, -20*s, 1
+            elif self.state == "arrived":
+                m_curve, eye_y_off, m_style = 1.8, 10*s, 1
+            else: # IDLE
+                m_curve, eye_y_off, m_style = 0.1, 0, 1
+
+            # --- 4. LES YEUX & SOURCILS ---
+            for side in [-1, 1]:
+                ex = cx + (side * 160 * s) + gx
+                ey = cy - 40 * s + eye_y_off + gy
+                h = 80 * s * self.eye_height
+                
+                self.canvas.create_oval(ex-65*s, ey-h-5, ex+65*s, ey+h+5, outline=glow_color, width=2)
+                self.canvas.create_oval(ex-60*s, ey-h, ex+60*s, ey+h, outline=color, width=4)
+                
+                if self.eye_height > 0.4:
+                    if self.state == "emergency":
+                        # Yeux en X
+                        self.canvas.create_line(ex-15*s, ey-15*s, ex+15*s, ey+15*s, fill=color, width=3)
+                        self.canvas.create_line(ex+15*s, ey-15*s, ex-15*s, ey+15*s, fill=color, width=3)
+                    else:
+                        px = math.sin(self.frame_count * 0.05) * 8 * s if self.state == "idle" else 0
+                        self.canvas.create_oval(ex-12*s+px, ey-12*s, ex+12*s+px, ey+12*s, fill=color)
+
+                brow_y = ey - 100 * s
+                if self.state == "emergency" or not self.connected: # Colère /!\
+                    self.canvas.create_line(ex-60*s, brow_y-20*s, ex+40*s*side, brow_y+20*s, fill=color, width=5)
+                elif self.state == "arrived": # Content
+                    self.canvas.create_line(ex-60*s, brow_y+10*s, ex+60*s, brow_y, fill=color, width=5)
+
+            # --- 5. LA BOUCHE ---
+            my = cy + 150 * s + gy
+            if self.state == "arrived":
+                bw_btn, bh_btn = 240 * s, 70 * s
+                self.canvas.create_rectangle(cx-bw_btn, my, cx+bw_btn, my+bh_btn, outline=color, width=4, fill="#001500")
+                self.canvas.create_text(cx, my+bh_btn/2, text=">> CONFIRM SYSTEM <<", fill=color, font=("Courier", int(18*s), "bold"))
+            else:
+                mw = 100 * s
+                ctrl_y = my + (m_curve * 50 * s)
+                self.canvas.create_line(cx-mw, my, cx, ctrl_y, cx+mw, my, fill=color, width=6, smooth=True)
+
     def draw_tactical_buttons(self):
-        # Bouton Paramètres (CMD)
         self.canvas.create_rectangle(self.w-70, self.h-70, self.w-20, self.h-20, outline="#0f0", width=2)
         self.canvas.create_text(self.w-45, self.h-45, text="CMD", fill="#0f0", font=("Courier", 10, "bold"))
         
-        # Bouton Arrêt Urgence (KILL_SW)
         self.canvas.create_rectangle(self.w-110, 20, self.w-20, 70, outline="red", width=2)
         self.canvas.create_text(self.w-65, 45, text="KILL_SW", fill="red", font=("Courier", 10, "bold"))
 
     def blink_logic(self):
-        if self.state != "booting" and self.state != "emergency":
-            self.eye_height = 0.1
-            self.root.after(150, lambda: setattr(self, 'eye_height', 1.0))
-        self.root.after(random.randint(3000, 6000), self.blink_logic)
+            if self.state != "booting" and self.state != "emergency":
+                self.eye_height = 0.05
+                self.root.after(80, lambda: setattr(self, 'eye_height', 1.0))
+            
+            # Fréquence de clignotement aléatoire
+            next_blink = random.randint(2000, 5000) if self.state == "idle" else 8000
+            self.root.after(next_blink, self.blink_logic)
 
 # --- EXECUTION ---
 if __name__ == "__main__":
     root = tk.Tk()
     app = SlayBotTactical(root)
-    # Lancement du réseau dans un thread séparé avec gestion de la loop
     threading.Thread(target=app.start_network, daemon=True).start()
     root.mainloop()

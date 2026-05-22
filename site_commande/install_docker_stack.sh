@@ -3,7 +3,7 @@ set -e
 
 APP_NAME="restaurant_site"
 APP_DIR="$HOME/Documents/site_commande/restaurant_site"
-SRC_DIR="$APP_DIR"  # On travaille directement dans le dossier où tu développes
+SRC_DIR="$APP_DIR" 
 
 echo "=== Mise à jour du système ==="
 sudo apt update && sudo apt upgrade -y

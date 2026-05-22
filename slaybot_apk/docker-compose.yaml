@@ -1,7 +1,8 @@
-version: '3'
 services:
-  kivyapp:
-    build:
-      context: .
+  kivy-apk:
+    image: ghcr.io/kivy/buildozer:latest
     volumes:
-      - .:/app
+      - .:/home/user/app
+    working_dir: /home/user/app
+    environment:
+      - BUILDOZER_WARN_ON_ROOT=0
