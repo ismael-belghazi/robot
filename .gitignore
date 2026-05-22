@@ -34,3 +34,4 @@ dist/
 
 # Pytest
 .pytest_cache/
+rap/
